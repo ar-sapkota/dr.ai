@@ -1,21 +1,23 @@
-from fastapi import APIRouter
-from pydantic import BaseModel
+from fastapi import APIRouter, UploadFile, File
+import os
+import shutil
 
 from app.rag.pipeline import multimodal_pipeline
 
-
 router = APIRouter()
 
-
-class Query(BaseModel):
-
-    question: str
+UPLOAD_FOLDER = "data/query_images"
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 
-@router.post("/chat")
+@router.post("/image-query")
+async def image_query(file: UploadFile = File(...)):
 
-def chat(query: Query):
+    file_path = os.path.join(UPLOAD_FOLDER, file.filename)
 
-    answer = multimodal_pipeline(question=query.question)
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    answer = multimodal_pipeline(image_path=file_path)
 
     return {"answer": answer}

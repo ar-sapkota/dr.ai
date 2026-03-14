@@ -17,13 +17,19 @@ def multimodal_pipeline(question=None, image_path=None):
 
     if image_path:
 
-        images = search_image(image_path)
+        docs = search_image(image_path)
 
-        for img in images:
+        for doc in docs:
 
-            if img["type"] == "image":
-                context += f"Related medical image: {img['path']}\n"
+            if doc["type"] == "text":
+                context += doc["content"] + "\n"
 
-    answer = generate_answer(question, context)
+            if doc["type"] == "image":
+                context += f"Related medical image: {doc['path']}\n"
+
+
+    query = question if question else "Explain this medical image."
+
+    answer = generate_answer(query, context)
 
     return answer

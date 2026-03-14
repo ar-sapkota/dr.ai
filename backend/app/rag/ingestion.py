@@ -41,22 +41,37 @@ def extract_text(pdf_path):
 
 
 def extract_images(pdf_path):
+
     doc = fitz.open(pdf_path)
+
     image_paths = []
+
     os.makedirs("data/images", exist_ok=True)
 
+    # Get clean PDF name
+    pdf_name = os.path.splitext(os.path.basename(pdf_path))[0]
+
     for page_index in range(len(doc)):
+
         page = doc[page_index]
+
         for img_index, img in enumerate(page.get_images(full=True)):
+
             xref = img[0]
+
             base_image = doc.extract_image(xref)
+
             image_bytes = base_image["image"]
 
-            image_path = f"data/images/page{page_index}_{img_index}.png"
+            image_path = f"data/images/{pdf_name}_page{page_index}_{img_index}.png"
+
             with open(image_path, "wb") as f:
                 f.write(image_bytes)
+
             image_paths.append(image_path)
+
     doc.close()
+
     return image_paths
 
 

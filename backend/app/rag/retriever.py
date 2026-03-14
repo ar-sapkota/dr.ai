@@ -12,7 +12,7 @@ index = faiss.read_index(settings.VECTOR_DB_PATH)
 metadata = np.load(
     settings.METADATA_PATH,
     allow_pickle=True
-)
+).tolist()
 
 
 def search_text(query, k=5):
