@@ -33,3 +33,6 @@ google-generativeai
 numpy
 scikit-learn
 pymupdf
+
+
+streamlit
