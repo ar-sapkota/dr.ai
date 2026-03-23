@@ -18,5 +18,7 @@ class Settings:
 
     IMAGE_PATH = os.getenv("IMAGE_PATH")
 
+    LANGSMITH= os.getenv('LANGSMITH_DR.AI_TEST')
+
 
 settings = Settings()
