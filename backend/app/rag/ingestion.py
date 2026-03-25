@@ -1,17 +1,49 @@
+import getpass
 import os
 import fitz
 import faiss
-import numpy as np
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from models.clip import CLIPEmbedder
-from dotenv import load_dotenv
-load_dotenv()
-os.makedirs("vectorstore", exist_ok=True)
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from google import genai 
+from google.genai import types
+import numpy as np
 
-embedder = CLIPEmbedder()
-dimension = 512
+embeddings = GoogleGenerativeAIEmbeddings(model="gemini-embedding-2-preview")
 
-# Paths
+
+
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+
+DIMENSION = 3072
+MODEL_ID = "gemini-embedding-2-preview"
+
+class GeminiEmbedding_2:
+    def embed_text(self, text:str):
+        result = client.models.embed_content(
+            model = MODEL_ID,
+            contentx = text
+        )
+        return result
+    
+    def embed_image(self, image_path:str):
+        with open(image_path, "rb") as f:
+            image_bytes = f.read()
+
+            mime_type = "image/png "if image_path.endswith(".png") else "image/jpeg"
+
+        result = client.models.embed_content(
+            model=MODEL_ID,
+            content = [
+                types.Part.from_bytes(
+                    data=image_bytes,
+                    mime_type=mime_type
+                )
+            ]
+        )
+        return result
+    
+embedder = GeminiEmbedding_2()
+
 VECTORSTORE_PATH = "vectorstore"
 INDEX_PATH = os.path.join(VECTORSTORE_PATH, "faiss.index")
 METADATA_PATH = os.path.join(VECTORSTORE_PATH, "metadata.npy")
@@ -22,7 +54,7 @@ if os.path.exists(INDEX_PATH):
     index = faiss.read_index(INDEX_PATH)
     metadata = np.load(METADATA_PATH, allow_pickle=True).tolist()
 else:
-    index = faiss.IndexFlatL2(dimension)
+    index = faiss.IndexFlatIP(DIMENSION)
     metadata = []
 
 # Load already processed files
@@ -79,13 +111,12 @@ def chunk_text(text):
     splitter = RecursiveCharacterTextSplitter(chunk_size=300, chunk_overlap=60,length_function=len)
     return splitter.split_text(text)
 
-
 def ingest_pdf(pdf_path):
     filename = os.path.basename(pdf_path)
 
     # === Duplicate Check ===
     if filename in processed_pdfs:
-        print(f"⏭️ Skipping (already processed): {filename}")
+        print(f" Skipping (already processed): {filename}")
         return
 
     print(f"Processing: {filename}")
@@ -93,18 +124,24 @@ def ingest_pdf(pdf_path):
     text = extract_text(pdf_path)
     chunks = chunk_text(text)
 
-    # Add text chunks
+    # process text
     for chunk in chunks:
         vector = embedder.embed_text(chunk)
-        index.add(np.array([vector]).astype("float32"))
+
+        vector_np = index.add(np.array([vector]).astype("float32"))
+        faiss.normalize_L2(vector_np)
+        index.add(vector_np)
         metadata.append({"type": "text", "content": chunk, "source": filename})
 
-    # Add images
+    # process images
     images = extract_images(pdf_path)
     for path in images:
         vector = embedder.embed_image(path)
-        index.add(np.array([vector]).astype("float32"))
+        vector_np = index.add(np.array([vector]).astype("float32"))
+        faiss.normalize_L2(vector_np)
+        index.add(vector_np)
         metadata.append({"type": "image", "path": path, "source": filename})
+
 
     # Mark as processed
     processed_pdfs.add(filename)
@@ -120,3 +157,4 @@ def ingest_pdf(pdf_path):
 
 if __name__ == "__main__":
     print("Ingestion module loaded. Use run_ingestion.py to start.")
+
