@@ -6,7 +6,7 @@ load_dotenv()
 
 class Settings:
 
-    GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+    GEMINI_API_KE = os.getenv("GEMINI_API_KEY")
 
     MODEL_NAME = os.getenv("MODEL_NAME")
 
@@ -18,7 +18,7 @@ class Settings:
 
     IMAGE_PATH = os.getenv("IMAGE_PATH")
 
-    LANGSMITH= os.getenv('LANGSMITH_DR.AI_TEST')
+    LANGSMITH= os.getenv('LANGSMITH_DR_AI_TEST')
 
 
 settings = Settings()
