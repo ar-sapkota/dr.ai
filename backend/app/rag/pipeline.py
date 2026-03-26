@@ -30,6 +30,6 @@ def multimodal_pipeline(question=None, image_path=None):
 
     query = question if question else "Explain this medical image."
 
-    answer = generate_answer(query, context)
+    answer = generate_answer(query, context, image_path=image_path)
 
     return answer

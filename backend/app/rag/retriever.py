@@ -24,27 +24,27 @@ class GeminiEmbedding_2:
     def embed_text(self, text:str):
         result = client.models.embed_content(
             model = MODEL_ID,
-            contentx = text,
+            contents = text,
             config=types.EmbedContentConfig(task_type="RETRIEVAL_QUERY")
         )
-        return result
+        return result.embeddings[0].values
     
     def embed_image(self, image_path:str):
         with open(image_path, "rb") as f:
             image_bytes = f.read()
 
-            mime_type = "image/png "if image_path.endswith(".png") else "image/jpeg"
+            mime_type = "image/png"if image_path.endswith(".png") else "image/jpeg"
 
         result = client.models.embed_content(
             model=MODEL_ID,
-            content = [
+            contents = [
                 types.Part.from_bytes(
                     data=image_bytes,
                     mime_type=mime_type
                 )
             ]
         )
-        return result
+        return result.embeddings[0].values
     
 embedder = GeminiEmbedding_2()
 
@@ -57,12 +57,11 @@ metadata = np.load(
 ).tolist()
 
 
-def perform_search(query, k=5):
-    
-    query_vector = np.array([vector]).astype("float32")
+def perform_search(vector: np.ndarray, k=5):
+    query_vector = np.array([vector]).astype("float32") ###
     faiss.normalize_L2(query_vector)
 
-    vector = embedder.embed_text(query)
+    
 
     #search
     distances, indices = index.search(query_vector, k)
@@ -72,12 +71,12 @@ def perform_search(query, k=5):
         if idx != -1:
             item = metadata[idx].copy()
             item["score"] = float(distances[0][i])
-            results.append(metadata[idx])
+            results.append(item)
 
     return results
 
 def search_text(query, k=5):
-    vector = embedder.embed_text(query)
+    vector = embedder.embed_text(query)###
     return perform_search(vector, k)
 
 def search_image(image_path, k=5):
