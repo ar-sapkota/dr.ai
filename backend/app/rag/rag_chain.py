@@ -1,11 +1,15 @@
-import google.generativeai as genai
-from PIL import Image
-from app.config import settings
+# app/rag/rag_chain.py
 
+from google import genai
+from google.genai import types
+import os
+from dotenv import load_dotenv
 
-genai.configure(api_key=settings.GOOGLE_API_KEY)
+load_dotenv()
 
-model = genai.GenerativeModel(settings.MODEL_NAME)
+client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
+MODEL_NAME = os.getenv("MODEL_NAME", "gemini-2.5-flash")
+
 
 def generate_answer(query: str, context: str, image_path: str = None):
     system_prompt = f"""You are Dr Sahab, a polite and knowledgeable medical AI assistant.
@@ -16,12 +20,26 @@ Relevant context from medical literature:
 """
     user_message = f"Patient question: {query}"
 
-    # FIX: build a multimodal content list when image is provided
     if image_path:
-        image = Image.open(image_path)
-        content = [system_prompt, image, user_message]  # ← image passed as PIL object
-    else:
-        content = [system_prompt, user_message]
+        with open(image_path, "rb") as f:
+            image_bytes = f.read()
+        mime_type = "image/png" if image_path.endswith(".png") else "image/jpeg"
 
-    response = model.generate_content(content)
+        response = client.models.generate_content(
+            model=MODEL_NAME,
+            contents=[
+                types.Part.from_text(text=system_prompt),
+                types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
+                types.Part.from_text(text=user_message)
+            ]
+        )
+    else:
+        response = client.models.generate_content(
+            model=MODEL_NAME,
+            contents=[
+                types.Part.from_text(text=system_prompt),
+                types.Part.from_text(text=user_message)
+            ]
+        )
+
     return response.text
