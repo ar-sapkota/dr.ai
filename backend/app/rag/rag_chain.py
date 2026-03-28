@@ -11,10 +11,19 @@ client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
 MODEL_NAME = os.getenv("MODEL_NAME", "gemini-2.5-flash")
 
 
-def generate_answer(query: str, context: str, image_path: str = None):
+def generate_answer(
+    query: str,
+    context: str,
+    image_path: str = None,
+    history_text: str = None,       # ← ADD THIS
+):
+    history_section = ""
+    if history_text and history_text != "No previous conversation.":
+        history_section = f"\nConversation history:\n{history_text}\n"
+
     system_prompt = f"""You are Dr Sahab, a polite and knowledgeable medical AI assistant.
 Always remind users to consult a qualified doctor for actual diagnosis.
-
+{history_section}
 Relevant context from medical literature:
 {context}
 """

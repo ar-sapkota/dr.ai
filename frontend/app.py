@@ -1,69 +1,148 @@
 import streamlit as st
 import requests
 from PIL import Image
+import json
 
 API_URL = "http://127.0.0.1:8000"
 
 st.set_page_config(page_title="Dr Sahab AI", layout="wide")
 
-st.title("🩺 Dr Sahab - Multimodal Medical AI")
-st.write("Ask a medical question using **text, image, or both**.")
+# ── session state init ───────────────────────────────────────────
+if "session_id" not in st.session_state:
+    st.session_state.session_id = None
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
-user_question = st.text_input("Enter your question")
 
-uploaded_image = st.file_uploader(
-    "Upload medical image (optional)",
-    type=["png", "jpg", "jpeg"]
-)
+def load_session_into_state(session_id: str):
+    """Fetch full message history for a session and load into state."""
+    res = requests.get(f"{API_URL}/sessions/{session_id}")
+    if res.status_code == 200:
+        data = res.json()
+        st.session_state.session_id = session_id
+        st.session_state.messages = data.get("messages", [])
 
-col1, col2 = st.columns([1, 1])
 
-with col1:
-    if st.button("Ask Doctor AI"):
+# ── sidebar ──────────────────────────────────────────────────────
+with st.sidebar:
+    st.markdown("### Dr Sahab AI")
 
-        # validation — at least one input required
-        if not user_question and not uploaded_image:
-            st.warning("Please enter a question or upload an image.")
-            st.stop()
+    # new chat button
+    if st.button("+ New conversation", use_container_width=True):
+        res = requests.post(f"{API_URL}/sessions/new")
+        if res.status_code == 200:
+            new_id = res.json()["session_id"]
+            st.session_state.session_id = new_id
+            st.session_state.messages = []
+            st.rerun()
 
-        # OLD: three separate if-elif blocks calling three different endpoints
-        # if uploaded_image and user_question:
-        #     response = requests.post(f"{API_URL}/multimodal-query", ...)
-        # elif uploaded_image:
-        #     response = requests.post(f"{API_URL}/image-query", ...)
-        # elif user_question:
-        #     response = requests.post(f"{API_URL}/chat", json={"question": ...})
+    st.divider()
 
-        # NEW: always call /ask with multipart/form-data
-        # both fields are optional — backend handles whichever is provided
-        data = {}
+    # list past conversations
+    sessions_res = requests.get(f"{API_URL}/sessions")
+    if sessions_res.status_code == 200:
+        sessions = sessions_res.json()
+
+        if not sessions:
+            st.caption("No conversations yet.")
+        else:
+            for s in sessions:
+                col_title, col_del = st.columns([5, 1])
+                is_active = s["id"] == st.session_state.session_id
+
+                with col_title:
+                    label = f"**{s['title']}**" if is_active else s["title"]
+                    if st.button(
+                        label,
+                        key=f"sess_{s['id']}",
+                        use_container_width=True
+                    ):
+                        load_session_into_state(s["id"])
+                        st.rerun()
+
+                with col_del:
+                    if st.button("✕", key=f"del_{s['id']}"):
+                        requests.delete(f"{API_URL}/sessions/{s['id']}")
+                        # if deleted session was active, clear state
+                        if st.session_state.session_id == s["id"]:
+                            st.session_state.session_id = None
+                            st.session_state.messages = []
+                        st.rerun()
+
+    st.divider()
+
+    # patient profile
+    st.caption("Patient profile")
+    try:
+        with open("memory/patient_profile.json", "r") as f:
+            profile = json.load(f)
+        st.write(f"**Name:** {profile.get('name') or '—'}")
+        st.write(f"**Age:** {profile.get('age') or '—'}")
+        conditions = ", ".join(profile.get("conditions", [])) or "—"
+        st.write(f"**Conditions:** {conditions}")
+    except FileNotFoundError:
+        st.caption("No profile yet.")
+
+
+# ── main chat area ───────────────────────────────────────────────
+st.title("🩺 Dr Sahab")
+
+if not st.session_state.session_id:
+    st.info("Start a new conversation or select one from the sidebar.")
+else:
+    # render existing messages
+    for msg in st.session_state.messages:
+        with st.chat_message("user"):
+            st.write(msg["question"])
+        with st.chat_message("assistant"):
+            st.write(msg["answer"])
+
+    # image uploader above input
+    uploaded_image = st.file_uploader(
+        "Attach a medical image (optional)",
+        type=["png", "jpg", "jpeg"],
+        label_visibility="collapsed"
+    )
+    if uploaded_image:
+        st.image(Image.open(uploaded_image), width=200)
+
+    # chat input at the bottom
+    user_question = st.chat_input("Ask Dr Sahab...")
+
+    if user_question or uploaded_image:
+        if user_question:
+            with st.chat_message("user"):
+                st.write(user_question)
+
+        data = {"session_id": st.session_state.session_id}
         files = {}
 
         if user_question:
             data["question"] = user_question
-
         if uploaded_image:
             files["file"] = (
                 uploaded_image.name,
                 uploaded_image.getvalue(),
-                uploaded_image.type       # preserves image/png or image/jpeg
+                uploaded_image.type
             )
 
-        with st.spinner("Dr Sahab is analyzing..."):
-            response = requests.post(
-                f"{API_URL}/ask",         # single unified endpoint
-                data=data,
-                files=files if files else None
-            )
+        with st.chat_message("assistant"):
+            with st.spinner("Analyzing..."):
+                response = requests.post(
+                    f"{API_URL}/ask",
+                    data=data,
+                    files=files if files else None
+                )
 
-        if response.status_code == 200:
-            result = response.json()
-            st.success("Dr Sahab's Response")
-            st.write(result["answer"])
-        else:
-            st.error(f"Backend error: {response.status_code} — {response.text}")
+            if response.status_code == 200:
+                result = response.json()
+                answer = result["answer"]
+                st.write(answer)
 
-with col2:
-    if uploaded_image:
-        image = Image.open(uploaded_image)
-        st.image(image, caption="Uploaded Image", use_column_width=True)
+                # update local state so new message shows immediately
+                st.session_state.messages.append({
+                    "question": user_question or "Image query",
+                    "answer": answer
+                })
+            else:
+                st.error(f"Error {response.status_code}: {response.text}")
