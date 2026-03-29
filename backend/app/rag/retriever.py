@@ -2,7 +2,6 @@
 import numpy as np
 
 from app.config import settings
-from models.clip import CLIPEmbedder
 import getpass
 import os
 import fitz
